@@ -103,13 +103,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate AI response
-    const response = await generateAIResponse(
-      message,
-      modelConfig,
-      apiKeyData,
-      (chat as any).messages || [],
-      aiMode
-    )
+const response = await generateAIResponse(
+  message,
+  modelConfig,
+  apiKeyData,
+  "messages" in chat ? chat.messages : [],
+  aiMode
+)
 
     // Deduct credits
     await prisma.user.update({
