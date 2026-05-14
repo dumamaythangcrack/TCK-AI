@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       message,
       modelConfig,
       apiKeyData,
-      chat.messages || [],
+      (chat as any).messages || [],
       aiMode
     )
 
