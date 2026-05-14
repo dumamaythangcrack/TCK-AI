@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create or get chat
-    let chat
+    let chat: any = null
     if (chatId) {
       chat = await prisma.chat.findUnique({
         where: { id: chatId },
