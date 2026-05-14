@@ -67,16 +67,19 @@ export async function POST(req: NextRequest) {
       if (!chat || chat.userId !== userId) {
         return NextResponse.json({ error: "Chat not found" }, { status: 404 })
       }
-    } else {
-      chat = await prisma.chat.create({
-        data: {
-          userId,
-          model: modelConfig.name,
-          aiMode: aiMode as AiMode,
-          title: message.substring(0, 50),
-        },
-      })
-    }
+   } else {
+  chat = await prisma.chat.create({
+    data: {
+      userId,
+      model: modelConfig.name,
+      aiMode: aiMode as AiMode,
+      title: message.substring(0, 50),
+    },
+    include: {
+      messages: true,
+    },
+  })
+}
 
     // Save user message
     await prisma.message.create({
@@ -104,7 +107,7 @@ export async function POST(req: NextRequest) {
       message,
       modelConfig,
       apiKeyData,
-      chat.messages,
+      chat.messages || [],
       aiMode
     )
 
