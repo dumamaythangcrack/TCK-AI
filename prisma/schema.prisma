@@ -1,0 +1,438 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum ApiProvider {
+  GLM
+  GEMINI
+  DEEPSEEK
+}
+
+enum AiMode {
+  CHAT
+  THINKING
+  SEARCH
+  STUDY
+  CODING
+  VISION
+  IMAGE_GENERATION
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum UploadStatus {
+  UPLOADING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                String               @id @default(cuid())
+  email             String              @unique
+  emailVerified     DateTime?
+  password          String
+  name              String?
+  image             String?
+  role              UserRole            @default(USER)
+  credits           Int                  @default(100)
+  dailyCredits      Int                  @default(100)
+  lastCreditReset   DateTime?
+  isBanned          Boolean              @default(false)
+  banReason         String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  // Relations
+  subscription      Subscription?
+  chats             Chat[]
+  messages          Message[]
+  folders           Folder[]
+  uploads           Upload[]
+  creditLogs        CreditLog[]
+  usageTracking     UsageTracking[]
+  otpCodes          OtpCode[]
+  sessions          Session[]
+  vectorMemories    VectorMemory[]
+  workspaces        Workspace[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Subscription {
+  id              String              @id @default(cuid())
+  userId          String              @unique
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId          String
+  plan            Plan                @relation(fields: [planId], references: [id])
+  status          SubscriptionStatus  @default(TRIAL)
+  startDate       DateTime            @default(now())
+  endDate         DateTime?
+  autoRenew       Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+}
+
+model Plan {
+  id              String              @id @default(cuid())
+  name            String              @unique
+  slug            String              @unique
+  description     String?
+  price           Float
+  currency        String              @default("VND")
+  dailyCredits    Int
+  features       String[]
+  isActive        Boolean             @default(true)
+  trialDays       Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  subscriptions   Subscription[]
+  paymentRequests PaymentRequest[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Chat {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String?
+  model           String       @default("TCK 4.5 Flash")
+  aiMode          AiMode       @default(CHAT)
+  isPinned        Boolean      @default(false)
+  isFavorite      Boolean      @default(false)
+  folderId        String?
+  folder          Folder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  lastUsedApiKey  String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  messages        Message[]
+
+  @@index([userId])
+  @@index([folderId])
+  @@index([isPinned])
+  @@index([isFavorite])
+}
+
+model Message {
+  id              String       @id @default(cuid())
+  chatId          String
+  chat            Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            MessageRole
+  content         String       @db.Text
+  reasoning       String?      @db.Text
+  citations       String[]     @default([])
+  uploadIds       String[]     @default([])
+  tokens          Int          @default(0)
+  creditsUsed     Int          @default(0)
+  model           String?
+  apiKey          String?
+  createdAt       DateTime     @default(now())
+
+  @@index([chatId])
+  @@index([userId])
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Folder {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  color           String?
+  icon            String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  chats           Chat[]
+
+  @@index([userId])
+}
+
+model Memory {
+  id              String       @id @default(cuid())
+  userId          String
+  key             String
+  value           String       @db.Text
+  category        String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
+}
+
+model Transaction {
+  id              String       @id @default(cuid())
+  userId          String
+  amount          Float
+  currency        String       @default("VND")
+  type            String
+  status          String
+  description     String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model PaymentRequest {
+  id              String          @id @default(cuid())
+  userId          String
+  planId          String
+  plan            Plan            @relation(fields: [planId], references: [id])
+  transferCode    String          @unique
+  amount          Float
+  currency        String          @default("VND")
+  status          PaymentStatus   @default(PENDING)
+  qrCode          String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedReason  String?
+  expiresAt       DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([transferCode])
+  @@index([status])
+}
+
+model ApiKey {
+  id              String       @id @default(cuid())
+  provider        ApiProvider
+  key             String
+  model           String
+  isActive        Boolean      @default(true)
+  priority        Int          @default(0)
+  requestCount    Int          @default(0)
+  errorCount      Int          @default(0)
+  lastUsedAt      DateTime?
+  cooldownUntil   DateTime?
+  healthScore     Float        @default(100)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  apiUsageLogs    ApiUsageLog[]
+
+  @@index([provider])
+  @@index([model])
+  @@index([isActive])
+}
+
+model ApiUsageLog {
+  id              String       @id @default(cuid())
+  apiKeyId        String
+  apiKey          ApiKey       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  userId          String?
+  chatId          String?
+  model           String
+  tokens          Int
+  creditsUsed     Int
+  success         Boolean
+  error           String?
+  duration        Int?
+  createdAt       DateTime     @default(now())
+
+  @@index([apiKeyId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Upload {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filename        String
+  originalName    String
+  mimeType        String
+  size            Int
+  url             String
+  status          UploadStatus   @default(UPLOADING)
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Prompt {
+  id              String       @id @default(cuid())
+  title           String
+  content         String       @db.Text
+  category        String?
+  tags            String[]
+  isPublic        Boolean      @default(false)
+  userId          String?
+  usageCount      Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([category])
+  @@index([isPublic])
+}
+
+model Notification {
+  id              String       @id @default(cuid())
+  userId          String
+  title           String
+  message         String       @db.Text
+  type            String
+  isRead          Boolean      @default(false)
+  actionUrl       String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model Session {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token           String       @unique
+  ipAddress       String?
+  userAgent       String?
+  expiresAt       DateTime
+  createdAt       DateTime     @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model OtpCode {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code            String
+  type            String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  attempts        Int          @default(0)
+  createdAt       DateTime     @default(now())
+
+  @@index([userId])
+  @@index([code])
+}
+
+model AdminLog {
+  id              String       @id @default(cuid())
+  adminId         String
+  action          String
+  target          String?
+  targetId        String?
+  details         Json?
+  ipAddress       String?
+  createdAt       DateTime     @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Workspace {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  settings        Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+model VectorMemory {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content         String       @db.Text
+  embedding       Unsupported("vector(1536)")?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+model CreditLog {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Int
+  type            String
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model UsageTracking {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime     @default(now())
+  messagesSent    Int          @default(0)
+  tokensUsed     Int          @default(0)
+  creditsUsed     Int          @default(0)
+  model           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+model ContactInfo {
+  id              String       @id @default(cuid())
+  key             String       @unique
+  value           String
+  updatedAt       DateTime     @updatedAt
+}
