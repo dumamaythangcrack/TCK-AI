@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create or get chat
-    let chat: any = null
+    let chat
     if (chatId) {
       chat = await prisma.chat.findUnique({
         where: { id: chatId },
@@ -67,19 +67,16 @@ export async function POST(req: NextRequest) {
       if (!chat || chat.userId !== userId) {
         return NextResponse.json({ error: "Chat not found" }, { status: 404 })
       }
-   } else {
-  chat = await prisma.chat.create({
-    data: {
-      userId,
-      model: modelConfig.name,
-      aiMode: aiMode as AiMode,
-      title: message.substring(0, 50),
-    },
-    include: {
-      messages: true,
-    },
-  })
-}
+    } else {
+      chat = await prisma.chat.create({
+        data: {
+          userId,
+          model: modelConfig.name,
+          aiMode: aiMode as AiMode,
+          title: message.substring(0, 50),
+        },
+      })
+    }
 
     // Save user message
     await prisma.message.create({
@@ -103,13 +100,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate AI response
-const response = await generateAIResponse(
-  message,
-  modelConfig,
-  apiKeyData,
-  "messages" in chat ? chat.messages : [],
-  aiMode
-)
+    const response = await generateAIResponse(
+      message,
+      modelConfig,
+      apiKeyData,
+      (chat as any).messages || [],
+      aiMode
+    )
 
     // Deduct credits
     await prisma.user.update({
